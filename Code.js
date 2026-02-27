@@ -4,9 +4,10 @@
  */
 
 var SS_PROP_KEY = 'cartographie_ss_id';
+var SS_ID = '1J6CJUv19G5FGzBPgL2czOW7vuYLMbkiq7liJH7YPnJQ';
 
 /**
- * Récupère le spreadsheet lié (bound) ou stocké en properties (standalone)
+ * Récupère le spreadsheet lié (bound) ou par ID hardcodé
  */
 function getSS_() {
   // 1. Essayer bound spreadsheet
@@ -15,7 +16,10 @@ function getSS_() {
     if (ss) return ss;
   } catch(e) {}
   
-  // 2. Essayer depuis PropertiesService
+  // 2. Utiliser l'ID hardcodé
+  try { return SpreadsheetApp.openById(SS_ID); } catch(e) {}
+  
+  // 3. Fallback PropertiesService
   var props = PropertiesService.getScriptProperties();
   var ssId = props.getProperty(SS_PROP_KEY);
   if (ssId) {
