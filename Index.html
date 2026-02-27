@@ -99,10 +99,11 @@
 <!-- LÉGENDE -->
 <div class="legend" id="legend">
   <strong>Légende</strong>
-  <div class="legend-row"><div class="legend-color" style="background:#e74c3c"></div> Centre ASU</div>
+  <div class="legend-row"><div class="legend-color" style="background:#e74c3c"></div> ASU seul</div>
   <div class="legend-row"><div class="legend-color" style="background:#2980b9"></div> VLM</div>
   <div class="legend-row"><div class="legend-color" style="background:#27ae60"></div> VL SSUAP</div>
-  <div class="legend-row"><div class="legend-color" style="background:#9b59b6"></div> VLM + VL SSUAP</div>
+  <div class="legend-row"><div class="legend-color" style="background:#2980b9;border:2px dashed #e74c3c"></div> VLM + ASU</div>
+  <div class="legend-row"><div class="legend-color" style="background:#27ae60;border:2px dashed #e74c3c"></div> VL SSUAP + ASU</div>
   <div class="legend-row"><div class="legend-color" style="background:#7f8c8d"></div> Aucun véhicule</div>
 </div>
 
@@ -148,12 +149,12 @@ function buildMarkerSVG(c, vue) {
     var hasVls = !!c.vlSsuap;
     var hasAsu = c.asu;
 
-    if (hasVlm && hasVls) { color = '#9b59b6'; label = 'V+S'; }
-    else if (hasVlm) { color = '#2980b9'; label = 'VLM'; }
+    if (hasVlm) { color = '#2980b9'; label = 'VLM'; }
     else if (hasVls) { color = '#27ae60'; label = 'VLS'; }
+    else if (hasAsu) { color = '#e74c3c'; label = 'ASU'; }
 
-    // Bordure ASU
-    if (hasAsu) {
+    // Bordure ASU rouge pointillée si ASU + un véhicule
+    if (hasAsu && (hasVlm || hasVls)) {
       icon = '<circle cx="'+h+'" cy="'+h+'" r="'+(r+1)+'" fill="none" stroke="#e74c3c" stroke-width="3" stroke-dasharray="4,2"/>';
     }
   } else {
@@ -328,10 +329,11 @@ function updateLegend(vue) {
   var leg = document.getElementById('legend');
   if (vue === 'actuelle') {
     leg.innerHTML = '<strong>Légende — État actuel</strong>'
-      + '<div class="legend-row"><div class="legend-color" style="background:#e74c3c"></div> Centre ASU (bordure rouge)</div>'
+      + '<div class="legend-row"><div class="legend-color" style="background:#e74c3c"></div> ASU seul</div>'
       + '<div class="legend-row"><div class="legend-color" style="background:#2980b9"></div> VLM</div>'
       + '<div class="legend-row"><div class="legend-color" style="background:#27ae60"></div> VL SSUAP</div>'
-      + '<div class="legend-row"><div class="legend-color" style="background:#9b59b6"></div> VLM + VL SSUAP</div>'
+      + '<div class="legend-row"><div class="legend-color" style="background:#2980b9;border:2px dashed #e74c3c"></div> VLM + ASU</div>'
+      + '<div class="legend-row"><div class="legend-color" style="background:#27ae60;border:2px dashed #e74c3c"></div> VL SSUAP + ASU</div>'
       + '<div class="legend-row"><div class="legend-color" style="background:#7f8c8d"></div> Aucun véhicule</div>';
   } else {
     var year = (vue === '2027') ? '2027' : '2032';

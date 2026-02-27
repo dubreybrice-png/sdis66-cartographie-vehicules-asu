@@ -144,6 +144,23 @@ var SpreadsheetSetup = (function () {
 
     sheet.setFrozenRows(1);
 
+    // Bouton « Ouvrir la carte » en H1
+    var url = WEBAPP_URL || '';
+    try {
+      var svcUrl = ScriptApp.getService().getUrl();
+      if (svcUrl) url = svcUrl;
+    } catch(e) {}
+    if (url) {
+      var btnRange = sheet.getRange('H1:J1').merge();
+      btnRange.setFormula('=HYPERLINK("' + url + '","🗺️ OUVRIR LA CARTE")');
+      btnRange.setBackground('#c0392b').setFontColor('#ffffff').setFontWeight('bold')
+        .setFontSize(14).setHorizontalAlignment('center').setVerticalAlignment('middle');
+      sheet.setRowHeight(1, 42);
+      sheet.setColumnWidth(8, 100);
+      sheet.setColumnWidth(9, 100);
+      sheet.setColumnWidth(10, 100);
+    }
+
     // Supprimer la feuille par défaut "Feuille 1" si elle existe
     try {
       var defSheet = ss.getSheetByName('Feuille 1') || ss.getSheetByName('Sheet1');

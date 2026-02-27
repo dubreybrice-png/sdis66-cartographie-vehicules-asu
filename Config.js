@@ -25,7 +25,6 @@ var Config = (function () {
     ASU:      '#e74c3c',   // rouge
     VLM:      '#2980b9',   // bleu
     VL_SSUAP: '#27ae60',   // vert
-    BOTH:     '#9b59b6',   // violet (VLM + VL SSUAP)
     NONE:     '#7f8c8d'    // gris
   };
 
@@ -74,7 +73,9 @@ var Config = (function () {
     { id: 'vallespir',            nom: 'Vallespir',                  lat: 42.4581, lng: 2.6313 },
     { id: 'vernet',               nom: 'Vernet',                     lat: 42.5458, lng: 2.3870 },
     { id: 'vinca',                nom: 'Vinca',                      lat: 42.6438, lng: 2.5277 },
-    { id: 'vingrau',              nom: 'Vingrau',                    lat: 42.8591, lng: 2.7382 }
+    { id: 'vingrau',              nom: 'Vingrau',                    lat: 42.8591, lng: 2.7382 },
+    { id: 'garde-psud',            nom: 'Garde PSud',                 lat: 42.6740, lng: 2.9010 },
+    { id: 'astreinte-med-dept',    nom: 'Astreinte médicale départementale', lat: 42.7060, lng: 2.8720 }
   ];
 
   function getNomsCentres() {

@@ -5,6 +5,7 @@
 
 var SS_PROP_KEY = 'cartographie_ss_id';
 var SS_ID = '1J6CJUv19G5FGzBPgL2czOW7vuYLMbkiq7liJH7YPnJQ';
+var WEBAPP_URL = 'https://script.google.com/macros/s/AKfycbxFtVxOlykkOymTQ_G3UUNVqq-Pej6p74GLgF3P23HmOU5Fvc6u1iCvq06yedGxBfNr/exec';
 
 /**
  * Récupère le spreadsheet lié (bound) ou par ID hardcodé
@@ -49,6 +50,7 @@ function onOpen() {
     .createMenu('🗺️ Cartographie Véhicules')
     .addItem('📋 Initialiser le classeur', 'initialiserClasseur')
     .addItem('🗺️ Ouvrir la carte', 'ouvrirCarte')
+    .addItem('🔗 Ajouter bouton carte dans la feuille', 'ajouterBoutonCarte')
     .addToUi();
 }
 
@@ -67,6 +69,38 @@ function ouvrirCarte() {
     .setWidth(1400)
     .setHeight(900);
   SpreadsheetApp.getUi().showModalDialog(html, '🗺️ Cartographie Véhicules et ASU');
+}
+
+/**
+ * Ajoute un bouton « Ouvrir la carte » cliquable dans la feuille Centres (cellule H1)
+ */
+function ajouterBoutonCarte() {
+  var ss = getSS_();
+  if (!ss) { SpreadsheetApp.getUi().alert('Aucun classeur trouvé. Initialisez d\'abord.'); return; }
+  var sheet = ss.getSheetByName(Config.SHEETS.CENTRES);
+  if (!sheet) { SpreadsheetApp.getUi().alert('Onglet Centres introuvable.'); return; }
+
+  // Récupérer l'URL de la webapp
+  var url = WEBAPP_URL;
+  try {
+    var svcUrl = ScriptApp.getService().getUrl();
+    if (svcUrl) url = svcUrl;
+  } catch(e) {}
+
+  var btnRange = sheet.getRange('H1:J1').merge();
+  btnRange.setFormula('=HYPERLINK("' + url + '","🗺️ OUVRIR LA CARTE")');
+  btnRange.setBackground('#c0392b')
+    .setFontColor('#ffffff')
+    .setFontWeight('bold')
+    .setFontSize(14)
+    .setHorizontalAlignment('center')
+    .setVerticalAlignment('middle');
+  sheet.setRowHeight(1, 42);
+  sheet.setColumnWidth(8, 100);
+  sheet.setColumnWidth(9, 100);
+  sheet.setColumnWidth(10, 100);
+
+  SpreadsheetApp.getActiveSpreadsheet().toast('Bouton ajouté en H1 ✅', 'Cartographie', 3);
 }
 
 /* ═══════════════════════════════════════════════════════
