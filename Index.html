@@ -1,0 +1,485 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>SDIS 66 — Cartographie Véhicules et ASU</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+  <style>
+    *{margin:0;padding:0;box-sizing:border-box}
+    body{font-family:'Segoe UI',Tahoma,Geneva,Verdana,sans-serif;background:#1a1a2e;color:#eee;overflow:hidden}
+
+    #header{display:flex;align-items:center;justify-content:space-between;background:linear-gradient(135deg,#c0392b,#e74c3c);padding:8px 16px;z-index:2000;position:relative;box-shadow:0 2px 10px rgba(0,0,0,.3)}
+    #header h1{font-size:1rem;font-weight:600}
+    #header .badge{background:rgba(255,255,255,.2);padding:3px 10px;border-radius:10px;font-size:.72rem}
+
+    #map{width:100%;height:calc(100vh - 42px)}
+
+    #loading{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:18px;background:linear-gradient(135deg,#1a1a2e 0%,#16213e 100%);z-index:9999}
+    #loading .load-title{font-size:1.8rem;font-weight:800;letter-spacing:3px;color:#e74c3c;text-transform:uppercase;animation:pulse 1.5s ease-in-out infinite}
+    #loading .load-sub{font-size:.85rem;color:#aaa;font-weight:400}
+    .spinner{width:44px;height:44px;border:5px solid rgba(231,76,60,.2);border-top-color:#e74c3c;border-radius:50%;animation:spin .7s linear infinite}
+    @keyframes spin{to{transform:rotate(360deg)}}
+    @keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
+
+    .legend{position:absolute;bottom:20px;left:10px;background:rgba(26,26,46,.92);padding:12px 16px;border-radius:12px;z-index:2000;font-size:.75rem;line-height:1.8;box-shadow:0 4px 16px rgba(0,0,0,.4)}
+    .legend strong{display:block;margin-bottom:4px;font-size:.82rem}
+    .legend-row{display:flex;align-items:center;gap:7px}
+    .legend-color{width:13px;height:13px;border-radius:50%;flex-shrink:0;border:2px solid rgba(255,255,255,.5)}
+
+    .controls{position:absolute;top:52px;left:10px;z-index:2000;display:flex;flex-direction:column;gap:4px}
+    .ctrl-btn{background:rgba(26,26,46,.9);color:#fff;border:1px solid rgba(255,255,255,.15);padding:6px 12px;border-radius:8px;cursor:pointer;font-size:.75rem;transition:all .2s;white-space:nowrap}
+    .ctrl-btn:hover{background:#e74c3c}
+    .ctrl-btn.active{background:#c0392b;border-color:#e74c3c}
+    .ctrl-sep{height:1px;background:rgba(255,255,255,.15);margin:2px 0}
+
+    #sidebar{position:absolute;top:52px;right:10px;width:320px;max-height:calc(100vh - 70px);background:rgba(26,26,46,.95);border-radius:12px;padding:14px;overflow-y:auto;z-index:2000;box-shadow:0 4px 20px rgba(0,0,0,.5);display:none}
+    #sidebar.visible{display:block}
+    #sidebar h2{font-size:.9rem;margin-bottom:6px;color:#e74c3c}
+    .info-row{display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px solid rgba(255,255,255,.08);font-size:.8rem}
+    .info-row .label{color:#999}.info-row .value{font-weight:600}
+    #sidebar .close-btn{position:absolute;top:6px;right:10px;background:none;border:none;color:#aaa;font-size:1rem;cursor:pointer}
+    #sidebar .close-btn:hover{color:#fff}
+
+    .leaflet-tooltip.centre-tooltip{background:rgba(26,26,46,.9);color:#fff;border:1px solid rgba(255,255,255,.2);border-radius:6px;padding:5px 9px;font-size:.75rem;font-weight:500;box-shadow:0 2px 8px rgba(0,0,0,.3)}
+    .leaflet-tooltip.centre-tooltip::before{border-top-color:rgba(26,26,46,.9)}
+
+    .marker-label{position:absolute;top:100%;left:50%;transform:translate(-50%,-4px);white-space:nowrap;font-size:9px;font-weight:700;color:#2c3e50;text-shadow:0 0 3px #fff,0 0 3px #fff,0 0 3px #fff,0 0 3px #fff;pointer-events:none;margin-top:0}
+
+    #export-modal{display:none;position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:5000;align-items:center;justify-content:center}
+    #export-modal.visible{display:flex}
+    #export-modal .modal-box{background:#1a1a2e;border-radius:14px;padding:24px;width:380px;text-align:center;box-shadow:0 8px 30px rgba(0,0,0,.6)}
+    #export-modal h3{margin-bottom:16px;color:#e74c3c;font-size:1.1rem}
+    .export-btn{display:block;width:100%;padding:12px;margin:8px 0;border:none;border-radius:8px;font-size:.9rem;cursor:pointer;font-weight:600;transition:all .2s}
+    .export-btn:hover{transform:scale(1.02)}
+    .export-btn.carte{background:#27ae60;color:#fff}
+    .export-btn.complet{background:#2980b9;color:#fff}
+    .export-btn.annuler{background:#555;color:#fff}
+    #export-status{margin-top:10px;font-size:.8rem;color:#f39c12;min-height:20px}
+
+    .vue-label{font-size:.68rem;color:#f39c12;font-weight:700;padding:2px 8px;text-transform:uppercase;letter-spacing:1px}
+  </style>
+</head>
+<body>
+
+<div id="loading">
+  <div class="spinner"></div>
+  <div class="load-title">🛡️ Chargement</div>
+  <div class="load-sub">Cartographie Véhicules et ASU — SDIS 66</div>
+</div>
+
+<div id="header">
+  <h1>🗺️ SDIS 66 — Cartographie Véhicules et ASU</h1>
+  <span class="badge" id="badge-info">Chargement…</span>
+</div>
+
+<div id="map"></div>
+
+<!-- CONTRÔLES -->
+<div class="controls">
+  <div class="vue-label">📍 Vue</div>
+  <button class="ctrl-btn active" id="btnVueActuelle" onclick="switchVue('actuelle')">🔴 État actuel</button>
+  <button class="ctrl-btn" id="btnVue2027" onclick="switchVue('2027')">🟣 Projection 2027</button>
+  <button class="ctrl-btn" id="btnVue2032" onclick="switchVue('2032')">🟠 Projection 2032</button>
+
+  <div class="ctrl-sep"></div>
+  <div class="vue-label" id="filtresLabel">🔍 Filtres (actuel)</div>
+  <button class="ctrl-btn active" id="btnASU" onclick="toggleFilter('asu',this)">❤️ ASU</button>
+  <button class="ctrl-btn active" id="btnVLM" onclick="toggleFilter('vlm',this)">🔵 VLM</button>
+  <button class="ctrl-btn active" id="btnVLSSUAP" onclick="toggleFilter('vlssuap',this)">🟢 VL SSUAP</button>
+
+  <div class="ctrl-sep"></div>
+  <button class="ctrl-btn active" onclick="toggleLabels(this)" id="btnLabels">🏷️ Noms</button>
+  <button class="ctrl-btn" onclick="showExportModal()">📄 Export PDF</button>
+</div>
+
+<!-- LÉGENDE -->
+<div class="legend" id="legend">
+  <strong>Légende</strong>
+  <div class="legend-row"><div class="legend-color" style="background:#e74c3c"></div> Centre ASU</div>
+  <div class="legend-row"><div class="legend-color" style="background:#2980b9"></div> VLM</div>
+  <div class="legend-row"><div class="legend-color" style="background:#27ae60"></div> VL SSUAP</div>
+  <div class="legend-row"><div class="legend-color" style="background:#9b59b6"></div> VLM + VL SSUAP</div>
+  <div class="legend-row"><div class="legend-color" style="background:#7f8c8d"></div> Aucun véhicule</div>
+</div>
+
+<!-- SIDEBAR -->
+<div id="sidebar">
+  <button class="close-btn" onclick="closeSidebar()">✕</button>
+  <h2 id="sb-title"></h2>
+  <div id="sb-content"></div>
+</div>
+
+<!-- EXPORT MODAL -->
+<div id="export-modal">
+  <div class="modal-box">
+    <h3>📄 Export PDF</h3>
+    <button class="export-btn carte" onclick="exportPDF('carte')">🗺️ Carte seule</button>
+    <button class="export-btn complet" onclick="exportPDF('complet')">🗺️ + 📊 Carte + Tableau</button>
+    <button class="export-btn annuler" onclick="closeExportModal()">Annuler</button>
+    <div id="export-status"></div>
+  </div>
+</div>
+
+<script>
+var map;
+var allMarkers = [];
+var centresData = [];
+var currentVue = 'actuelle';  // 'actuelle', '2027', '2032'
+var filters = { asu: true, vlm: true, vlssuap: true };
+var labelsVisible = true;
+
+var PO_BOUNDS = L.latLngBounds(L.latLng(42.33, 1.72), L.latLng(42.92, 3.18));
+
+/* ═══════ ICÔNES SVG ═══════ */
+function buildMarkerSVG(c, vue) {
+  var size = 32;
+  var h = size / 2;
+  var r = h - 2;
+  var color = '#7f8c8d'; // gris par défaut
+  var icon = '';
+  var label = '';
+
+  if (vue === 'actuelle') {
+    var hasVlm = !!c.vlm;
+    var hasVls = !!c.vlSsuap;
+    var hasAsu = c.asu;
+
+    if (hasVlm && hasVls) { color = '#9b59b6'; label = 'V+S'; }
+    else if (hasVlm) { color = '#2980b9'; label = 'VLM'; }
+    else if (hasVls) { color = '#27ae60'; label = 'VLS'; }
+
+    // Bordure ASU
+    if (hasAsu) {
+      icon = '<circle cx="'+h+'" cy="'+h+'" r="'+(r+1)+'" fill="none" stroke="#e74c3c" stroke-width="3" stroke-dasharray="4,2"/>';
+    }
+  } else {
+    var proj = (vue === '2027') ? c.projection2027 : c.projection2032;
+    if (proj) {
+      if (proj.indexOf('VLM') === 0) { color = '#2980b9'; label = 'VLM'; }
+      else if (proj.indexOf('VL SSUAP') === 0) { color = '#27ae60'; label = 'VLS'; }
+    }
+  }
+
+  var svg = '<svg width="'+size+'" height="'+size+'" viewBox="0 0 '+size+' '+size+'">'
+    + icon
+    + '<circle cx="'+h+'" cy="'+h+'" r="'+r+'" fill="'+color+'" stroke="#fff" stroke-width="2"/>'
+    + (label ? '<text x="'+h+'" y="'+(h+4)+'" text-anchor="middle" fill="#fff" font-size="8" font-weight="bold">'+label+'</text>' : '')
+    + '</svg>';
+  return svg;
+}
+
+function shouldShowMarker(c, vue) {
+  if (vue === 'actuelle') {
+    var show = false;
+    if (filters.asu && c.asu) show = true;
+    if (filters.vlm && c.vlm) show = true;
+    if (filters.vlssuap && c.vlSsuap) show = true;
+    // Si aucun filtre ne matche mais le centre a rien, on le montre si au moins un filtre est actif
+    if (!c.asu && !c.vlm && !c.vlSsuap) show = true;
+    return show;
+  } else {
+    var proj = (vue === '2027') ? c.projection2027 : c.projection2032;
+    return true; // toujours montrer en projection
+  }
+}
+
+/* ═══════ INIT ═══════ */
+function init() {
+  google.script.run.withSuccessHandler(function(cfg) { initMap(cfg); chargerDonnees(); })
+    .withFailureHandler(function() { initMap({center:{lat:42.58,lng:2.55},zoom:10}); chargerDonnees(); })
+    .getMapConfig();
+}
+
+function initMap(cfg) {
+  map = L.map('map', {
+    center: [cfg.center.lat, cfg.center.lng],
+    zoom: cfg.zoom || 10,
+    zoomControl: true,
+    maxBounds: PO_BOUNDS.pad(0.05),
+    maxBoundsViscosity: 1.0,
+    minZoom: 9
+  });
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    attribution: '© OSM | SDIS 66',
+    maxZoom: 18,
+    bounds: PO_BOUNDS
+  }).addTo(map);
+  document.getElementById('loading').style.display = 'none';
+}
+
+function chargerDonnees() {
+  google.script.run.withSuccessHandler(function(data) {
+    centresData = data || [];
+    renderMarkers();
+    updateBadge();
+  }).withFailureHandler(function(err) {
+    console.error('Erreur:', err);
+    document.getElementById('badge-info').textContent = 'Erreur';
+  }).getCarteData();
+}
+
+function updateBadge() {
+  var nASU = 0, nVLM = 0, nVLS = 0;
+  centresData.forEach(function(c) {
+    if (c.asu) nASU++;
+    if (c.vlm) nVLM++;
+    if (c.vlSsuap) nVLS++;
+  });
+  document.getElementById('badge-info').textContent = centresData.length + ' centres | ASU: ' + nASU + ' | VLM: ' + nVLM + ' | VL SSUAP: ' + nVLS;
+}
+
+/* ═══════ RENDU MARKERS ═══════ */
+function renderMarkers() {
+  // Supprimer les anciens
+  allMarkers.forEach(function(m) { map.removeLayer(m); });
+  allMarkers = [];
+
+  centresData.forEach(function(c) {
+    if (!c.lat || !c.lng) return;
+    if (!shouldShowMarker(c, currentVue)) return;
+
+    var size = 32;
+    var svg = buildMarkerSVG(c, currentVue);
+    var icon = L.divIcon({
+      className: '',
+      html: svg + '<div class="marker-label" style="display:' + (labelsVisible ? 'block' : 'none') + '">' + c.nom + '</div>',
+      iconSize: [size, size + 10],
+      iconAnchor: [size / 2, size / 2]
+    });
+
+    var m = L.marker([c.lat, c.lng], { icon: icon });
+
+    // Tooltip
+    var tipHtml = '<strong>' + c.nom + '</strong>';
+    if (currentVue === 'actuelle') {
+      tipHtml += '<br>ASU: <b style="color:' + (c.asu ? '#e74c3c' : '#999') + '">' + (c.asu ? '✅ Oui' : '❌ Non') + '</b>';
+      tipHtml += '<br>VLM: <b style="color:#2980b9">' + (c.vlm || '—') + '</b>';
+      tipHtml += '<br>VL SSUAP: <b style="color:#27ae60">' + (c.vlSsuap || '—') + '</b>';
+    } else if (currentVue === '2027') {
+      tipHtml += '<br>Projection 2027: <b style="color:#9b59b6">' + (c.projection2027 || '—') + '</b>';
+    } else {
+      tipHtml += '<br>Projection 2032: <b style="color:#d35400">' + (c.projection2032 || '—') + '</b>';
+    }
+
+    m.bindTooltip(tipHtml, { className: 'centre-tooltip', direction: 'top', offset: [0, -size / 2 + 4] });
+    m.on('click', function() { showSidebar(c); });
+    m.addTo(map);
+    m._centreData = c;
+    allMarkers.push(m);
+  });
+
+  if (allMarkers.length > 0) {
+    var grp = L.featureGroup(allMarkers);
+    map.fitBounds(grp.getBounds().pad(0.02));
+  }
+}
+
+/* ═══════ SIDEBAR ═══════ */
+function showSidebar(c) {
+  var sb = document.getElementById('sidebar');
+  document.getElementById('sb-title').textContent = '🏛️ ' + c.nom;
+
+  var html = '';
+  html += infoRow('ASU', c.asu ? '<span style="color:#e74c3c;font-weight:700">✅ Oui</span>' : '<span style="color:#999">❌ Non</span>');
+  html += infoRow('VLM (actuel)', c.vlm ? '<span style="color:#2980b9">' + c.vlm + '</span>' : '<span style="color:#999">—</span>');
+  html += infoRow('VL SSUAP (actuel)', c.vlSsuap ? '<span style="color:#27ae60">' + c.vlSsuap + '</span>' : '<span style="color:#999">—</span>');
+  html += '<div style="height:8px"></div>';
+  html += infoRow('Projection 2027', c.projection2027 ? '<span style="color:#9b59b6;font-weight:700">' + c.projection2027 + '</span>' : '<span style="color:#999">—</span>');
+  html += infoRow('Projection 2032', c.projection2032 ? '<span style="color:#d35400;font-weight:700">' + c.projection2032 + '</span>' : '<span style="color:#999">—</span>');
+
+  document.getElementById('sb-content').innerHTML = html;
+  sb.classList.add('visible');
+}
+
+function closeSidebar() { document.getElementById('sidebar').classList.remove('visible'); }
+function infoRow(l, v) { return '<div class="info-row"><span class="label">' + l + '</span><span class="value">' + v + '</span></div>'; }
+
+/* ═══════ SWITCH VUE ═══════ */
+function switchVue(vue) {
+  currentVue = vue;
+  // Boutons vue
+  document.getElementById('btnVueActuelle').classList.toggle('active', vue === 'actuelle');
+  document.getElementById('btnVue2027').classList.toggle('active', vue === '2027');
+  document.getElementById('btnVue2032').classList.toggle('active', vue === '2032');
+
+  // Afficher/cacher les filtres (seulement en vue actuelle)
+  var filtresBtns = document.querySelectorAll('#btnASU, #btnVLM, #btnVLSSUAP');
+  var filtresLbl = document.getElementById('filtresLabel');
+  if (vue === 'actuelle') {
+    filtresBtns.forEach(function(b) { b.style.display = 'block'; });
+    filtresLbl.style.display = 'block';
+  } else {
+    filtresBtns.forEach(function(b) { b.style.display = 'none'; });
+    filtresLbl.style.display = 'none';
+  }
+
+  // Mettre à jour la légende
+  updateLegend(vue);
+
+  renderMarkers();
+  closeSidebar();
+}
+
+function updateLegend(vue) {
+  var leg = document.getElementById('legend');
+  if (vue === 'actuelle') {
+    leg.innerHTML = '<strong>Légende — État actuel</strong>'
+      + '<div class="legend-row"><div class="legend-color" style="background:#e74c3c"></div> Centre ASU (bordure rouge)</div>'
+      + '<div class="legend-row"><div class="legend-color" style="background:#2980b9"></div> VLM</div>'
+      + '<div class="legend-row"><div class="legend-color" style="background:#27ae60"></div> VL SSUAP</div>'
+      + '<div class="legend-row"><div class="legend-color" style="background:#9b59b6"></div> VLM + VL SSUAP</div>'
+      + '<div class="legend-row"><div class="legend-color" style="background:#7f8c8d"></div> Aucun véhicule</div>';
+  } else {
+    var year = (vue === '2027') ? '2027' : '2032';
+    var color = (vue === '2027') ? '#9b59b6' : '#d35400';
+    leg.innerHTML = '<strong>Légende — Projection ' + year + '</strong>'
+      + '<div class="legend-row"><div class="legend-color" style="background:#2980b9"></div> VLM</div>'
+      + '<div class="legend-row"><div class="legend-color" style="background:#27ae60"></div> VL SSUAP</div>'
+      + '<div class="legend-row"><div class="legend-color" style="background:#7f8c8d"></div> Aucun véhicule</div>';
+  }
+}
+
+/* ═══════ FILTRES ═══════ */
+function toggleFilter(type, btn) {
+  filters[type] = !filters[type];
+  btn.classList.toggle('active');
+  renderMarkers();
+}
+
+function toggleLabels(btn) {
+  labelsVisible = !labelsVisible;
+  btn.classList.toggle('active');
+  var d = labelsVisible ? 'block' : 'none';
+  document.querySelectorAll('.marker-label').forEach(function(el) { el.style.display = d; });
+}
+
+/* ═══════ EXPORT PDF ═══════ */
+function showExportModal() { document.getElementById('export-modal').classList.add('visible'); }
+function closeExportModal() { document.getElementById('export-modal').classList.remove('visible'); document.getElementById('export-status').textContent = ''; }
+
+function exportPDF(mode) {
+  var status = document.getElementById('export-status');
+  status.textContent = '⏳ Génération en cours…';
+  var mapEl = document.getElementById('map');
+
+  html2canvas(mapEl, { useCORS: true, scale: 2, logging: false, backgroundColor: '#f0f0f0' }).then(function(canvas) {
+    var jsPDF = window.jspdf.jsPDF;
+    var pdf = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
+    var pageW = pdf.internal.pageSize.getWidth();
+    var pageH = pdf.internal.pageSize.getHeight();
+
+    // Header
+    pdf.setFillColor(192, 57, 43); pdf.rect(0, 0, pageW, 12, 'F');
+    pdf.setTextColor(255, 255, 255); pdf.setFontSize(13); pdf.setFont(undefined, 'bold');
+    var vueLabel = currentVue === 'actuelle' ? 'État actuel' : 'Projection ' + currentVue;
+    pdf.text('SDIS 66 — Cartographie Véhicules et ASU — ' + vueLabel, pageW / 2, 8, { align: 'center' });
+    pdf.setFontSize(7); pdf.setFont(undefined, 'normal');
+    var now = new Date().toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+    pdf.text('Généré le ' + now, pageW - 5, 8, { align: 'right' });
+
+    // Map image
+    var imgData = canvas.toDataURL('image/png');
+    var mapY = 14;
+    var mapH = pageH - 18;
+    var ratio = canvas.width / canvas.height;
+    var mapW = Math.min(pageW - 10, mapH * ratio);
+    pdf.addImage(imgData, 'PNG', (pageW - mapW) / 2, mapY, mapW, mapH);
+
+    if (mode === 'complet') {
+      status.textContent = '⏳ Récupération du tableau…';
+      google.script.run.withSuccessHandler(function(tableau) {
+        pdf.addPage();
+        ajouterTableauPDF(pdf, tableau, 10, pageW, pageH);
+        pdf.save('cartographie_vehicules_SDIS66_' + currentVue + '.pdf');
+        status.textContent = '✅ PDF téléchargé !';
+        setTimeout(closeExportModal, 1500);
+      }).withFailureHandler(function(err) { status.textContent = '❌ Erreur: ' + err; }).getTableauData(currentVue);
+    } else {
+      pdf.save('cartographie_vehicules_SDIS66_' + currentVue + '.pdf');
+      status.textContent = '✅ PDF téléchargé !';
+      setTimeout(closeExportModal, 1500);
+    }
+  }).catch(function(err) { status.textContent = '❌ Erreur: ' + err.message; });
+}
+
+function ajouterTableauPDF(pdf, tableau, startY, pageW, pageH) {
+  pdf.setFillColor(192, 57, 43); pdf.rect(0, 0, pageW, 12, 'F');
+  pdf.setTextColor(255, 255, 255); pdf.setFontSize(13); pdf.setFont(undefined, 'bold');
+  var vueLabel = currentVue === 'actuelle' ? 'État actuel' : 'Projection ' + currentVue;
+  pdf.text('SDIS 66 — Tableau ' + vueLabel, pageW / 2, 8, { align: 'center' });
+  var now = new Date().toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+  pdf.setFontSize(7); pdf.setFont(undefined, 'normal'); pdf.text('Généré le ' + now, pageW - 5, 8, { align: 'right' });
+
+  var cols;
+  if (currentVue === 'actuelle') {
+    cols = [
+      { h: 'Centre', w: 50, k: 'nom' },
+      { h: 'ASU', w: 20, k: 'asu' },
+      { h: 'VLM', w: 40, k: 'vlm' },
+      { h: 'VL SSUAP', w: 45, k: 'vlSsuap' }
+    ];
+  } else {
+    var projKey = currentVue === '2027' ? 'projection2027' : 'projection2032';
+    cols = [
+      { h: 'Centre', w: 50, k: 'nom' },
+      { h: 'Véhicule ' + currentVue, w: 60, k: projKey }
+    ];
+  }
+
+  var totalW = cols.reduce(function(s, c) { return s + c.w; }, 0);
+  var startX = (pageW - totalW) / 2;
+  var rowH = 5;
+  var y = startY;
+
+  // Table header
+  pdf.setFillColor(44, 62, 80); pdf.rect(startX, y, totalW, rowH + 1, 'F');
+  pdf.setTextColor(255, 255, 255); pdf.setFontSize(7.5); pdf.setFont(undefined, 'bold');
+  var x = startX;
+  cols.forEach(function(col) { pdf.text(col.h, x + col.w / 2, y + 3.8, { align: 'center' }); x += col.w; });
+  y += rowH + 1;
+
+  tableau.sort(function(a, b) { return a.nom.localeCompare(b.nom); });
+
+  pdf.setFont(undefined, 'normal');
+  for (var i = 0; i < tableau.length; i++) {
+    var row = tableau[i];
+    if (y + rowH > pageH - 5) { pdf.addPage(); y = 10; }
+    if (i % 2 === 0) { pdf.setFillColor(248, 249, 250); pdf.rect(startX, y, totalW, rowH, 'F'); }
+
+    pdf.setFontSize(7); x = startX;
+    cols.forEach(function(col) {
+      var val = row[col.k];
+      if (col.k === 'asu') val = val ? 'Oui' : 'Non';
+      val = String(val || '—');
+
+      if (col.k === 'asu') pdf.setTextColor(val === 'Oui' ? 231 : 150, val === 'Oui' ? 76 : 150, val === 'Oui' ? 60 : 150);
+      else if (col.k === 'vlm') pdf.setTextColor(41, 128, 185);
+      else if (col.k === 'vlSsuap') pdf.setTextColor(39, 174, 96);
+      else if (col.k.indexOf('projection') === 0) pdf.setTextColor(142, 68, 173);
+      else pdf.setTextColor(44, 62, 80);
+
+      var align = (col.k === 'nom') ? 'left' : 'center';
+      var tx = align === 'left' ? x + 2 : x + col.w / 2;
+      pdf.text(val, tx, y + 3.5, { align: align });
+      x += col.w;
+    });
+    y += rowH;
+  }
+  pdf.setDrawColor(200, 200, 200); pdf.rect(startX, startY, totalW, y - startY);
+}
+
+/* ═══════ EVENTS ═══════ */
+document.addEventListener('DOMContentLoaded', function() {
+  document.getElementById('map').addEventListener('click', function(e) {
+    if (e.target.classList.contains('leaflet-container') || e.target.classList.contains('leaflet-tile')) closeSidebar();
+  });
+});
+
+init();
+</script>
+</body>
+</html>
