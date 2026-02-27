@@ -74,8 +74,8 @@ var Config = (function () {
     { id: 'vernet',               nom: 'Vernet',                     lat: 42.5458, lng: 2.3870 },
     { id: 'vinca',                nom: 'Vinca',                      lat: 42.6438, lng: 2.5277 },
     { id: 'vingrau',              nom: 'Vingrau',                    lat: 42.8591, lng: 2.7382 },
-    { id: 'garde-psud',            nom: 'Garde PSud',                 lat: 42.6740, lng: 2.9010 },
-    { id: 'astreinte-med-dept',    nom: 'Astreinte médicale départementale', lat: 42.7060, lng: 2.8720 }
+    { id: 'garde-psud',            nom: 'Garde PSud',                 lat: 42.6770, lng: 2.8950 },
+    { id: 'astreinte-med-dept',    nom: 'Astreinte médicale départementale', lat: 42.7200, lng: 2.8950, special: true }
   ];
 
   function getNomsCentres() {

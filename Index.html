@@ -61,6 +61,13 @@
     #export-status{margin-top:10px;font-size:.8rem;color:#f39c12;min-height:20px}
 
     .vue-label{font-size:.68rem;color:#f39c12;font-weight:700;padding:2px 8px;text-transform:uppercase;letter-spacing:1px}
+
+    #astreinte-panel{position:absolute;top:52px;right:340px;z-index:2000;background:rgba(26,26,46,.94);border:2px solid #e74c3c;border-radius:14px;padding:14px 18px;box-shadow:0 4px 20px rgba(231,76,60,.3);min-width:220px;display:none}
+    #astreinte-panel.visible{display:block}
+    #astreinte-panel h3{color:#e74c3c;font-size:.85rem;margin-bottom:8px;text-align:center}
+    #astreinte-panel .ap-row{display:flex;justify-content:space-between;padding:4px 0;border-bottom:1px solid rgba(255,255,255,.08);font-size:.78rem}
+    #astreinte-panel .ap-label{color:#999}
+    #astreinte-panel .ap-value{font-weight:700}
   </style>
 </head>
 <body>
@@ -102,9 +109,15 @@
   <div class="legend-row"><div class="legend-color" style="background:#e74c3c"></div> ASU seul</div>
   <div class="legend-row"><div class="legend-color" style="background:#2980b9"></div> VLM</div>
   <div class="legend-row"><div class="legend-color" style="background:#27ae60"></div> VL SSUAP</div>
-  <div class="legend-row"><div class="legend-color" style="background:#2980b9;border:2px dashed #e74c3c"></div> VLM + ASU</div>
-  <div class="legend-row"><div class="legend-color" style="background:#27ae60;border:2px dashed #e74c3c"></div> VL SSUAP + ASU</div>
+  <div class="legend-row"><svg width="16" height="16" viewBox="0 0 16 16" style="flex-shrink:0"><polygon points="8,1 9.5,5.5 14,5.5 10.5,8.5 12,13 8,10.5 4,13 5.5,8.5 2,5.5 6.5,5.5" fill="#e74c3c"/><circle cx="8" cy="8" r="4" fill="#2980b9"/></svg> VLM + ASU (pics rouges)</div>
+  <div class="legend-row"><svg width="16" height="16" viewBox="0 0 16 16" style="flex-shrink:0"><polygon points="8,1 9.5,5.5 14,5.5 10.5,8.5 12,13 8,10.5 4,13 5.5,8.5 2,5.5 6.5,5.5" fill="#e74c3c"/><circle cx="8" cy="8" r="4" fill="#27ae60"/></svg> VL SSUAP + ASU (pics rouges)</div>
   <div class="legend-row"><div class="legend-color" style="background:#7f8c8d"></div> Aucun véhicule</div>
+</div>
+
+<!-- PANNEAU ASTREINTE MÉDICALE -->
+<div id="astreinte-panel">
+  <h3>🏥 Astreinte Médicale<br>Départementale</h3>
+  <div id="ap-content"><em style="color:#666;font-size:.75rem">Chargement…</em></div>
 </div>
 
 <!-- SIDEBAR -->
@@ -136,12 +149,24 @@ var labelsVisible = true;
 var PO_BOUNDS = L.latLngBounds(L.latLng(42.33, 1.72), L.latLng(42.92, 3.18));
 
 /* ═══════ ICÔNES SVG ═══════ */
+function buildStarburstPath(cx, cy, outerR, innerR, points) {
+  var d = '';
+  for (var i = 0; i < points * 2; i++) {
+    var angle = (Math.PI * i / points) - Math.PI / 2;
+    var r = (i % 2 === 0) ? outerR : innerR;
+    var x = cx + r * Math.cos(angle);
+    var y = cy + r * Math.sin(angle);
+    d += (i === 0 ? 'M' : 'L') + x.toFixed(1) + ',' + y.toFixed(1);
+  }
+  return d + 'Z';
+}
+
 function buildMarkerSVG(c, vue) {
-  var size = 32;
+  var size = 36;
   var h = size / 2;
-  var r = h - 2;
+  var r = 13;
   var color = '#7f8c8d'; // gris par défaut
-  var icon = '';
+  var asuLayer = '';
   var label = '';
 
   if (vue === 'actuelle') {
@@ -153,9 +178,10 @@ function buildMarkerSVG(c, vue) {
     else if (hasVls) { color = '#27ae60'; label = 'VLS'; }
     else if (hasAsu) { color = '#e74c3c'; label = 'ASU'; }
 
-    // Bordure ASU rouge pointillée si ASU + un véhicule
+    // Contour étoilé rouge (pics) si ASU
     if (hasAsu && (hasVlm || hasVls)) {
-      icon = '<circle cx="'+h+'" cy="'+h+'" r="'+(r+1)+'" fill="none" stroke="#e74c3c" stroke-width="3" stroke-dasharray="4,2"/>';
+      var starPath = buildStarburstPath(h, h, r + 5, r + 1, 10);
+      asuLayer = '<path d="' + starPath + '" fill="#e74c3c" stroke="#b71c1c" stroke-width="1"/>';
     }
   } else {
     var proj = (vue === '2027') ? c.projection2027 : c.projection2032;
@@ -165,9 +191,8 @@ function buildMarkerSVG(c, vue) {
     }
   }
 
-  var svg = '<svg width="'+size+'" height="'+size+'" viewBox="0 0 '+size+' '+size+'">'
-    + icon
-    + '<circle cx="'+h+'" cy="'+h+'" r="'+r+'" fill="'+color+'" stroke="#fff" stroke-width="2"/>'
+  var svg = '<svg width="'+size+'" height="'+size+'" viewBox="0 0 '+size+' '+size+'">' 
+    + asuLayer
     + (label ? '<text x="'+h+'" y="'+(h+4)+'" text-anchor="middle" fill="#fff" font-size="8" font-weight="bold">'+label+'</text>' : '')
     + '</svg>';
   return svg;
@@ -239,16 +264,24 @@ function renderMarkers() {
   allMarkers.forEach(function(m) { map.removeLayer(m); });
   allMarkers = [];
 
+  // Astreinte médicale départementale → panneau à part
+  var astreinteData = null;
+  centresData.forEach(function(c) {
+    if (c.nom === 'Astreinte médicale départementale') { astreinteData = c; }
+  });
+  updateAstreintePanel(astreinteData);
+
   centresData.forEach(function(c) {
     if (!c.lat || !c.lng) return;
+    if (c.nom === 'Astreinte médicale départementale') return; // affiché dans le panneau
     if (!shouldShowMarker(c, currentVue)) return;
 
-    var size = 32;
+    var size = 36;
     var svg = buildMarkerSVG(c, currentVue);
     var icon = L.divIcon({
       className: '',
       html: svg + '<div class="marker-label" style="display:' + (labelsVisible ? 'block' : 'none') + '">' + c.nom + '</div>',
-      iconSize: [size, size + 10],
+      iconSize: [size, size + 12],
       iconAnchor: [size / 2, size / 2]
     });
 
@@ -299,6 +332,24 @@ function showSidebar(c) {
 function closeSidebar() { document.getElementById('sidebar').classList.remove('visible'); }
 function infoRow(l, v) { return '<div class="info-row"><span class="label">' + l + '</span><span class="value">' + v + '</span></div>'; }
 
+/* ═══════ PANNEAU ASTREINTE MÉDICALE ═══════ */
+function updateAstreintePanel(c) {
+  var panel = document.getElementById('astreinte-panel');
+  if (!c) { panel.classList.remove('visible'); return; }
+  var html = '';
+  if (currentVue === 'actuelle') {
+    html += '<div class="ap-row"><span class="ap-label">ASU</span><span class="ap-value" style="color:'+(c.asu?'#e74c3c':'#999')+'">'+(c.asu?'✅ Oui':'❌ Non')+'</span></div>';
+    html += '<div class="ap-row"><span class="ap-label">VLM</span><span class="ap-value" style="color:#2980b9">'+(c.vlm||'—')+'</span></div>';
+    html += '<div class="ap-row"><span class="ap-label">VL SSUAP</span><span class="ap-value" style="color:#27ae60">'+(c.vlSsuap||'—')+'</span></div>';
+  } else {
+    var proj = (currentVue === '2027') ? c.projection2027 : c.projection2032;
+    var clr = (currentVue === '2027') ? '#9b59b6' : '#d35400';
+    html += '<div class="ap-row"><span class="ap-label">Projection '+currentVue+'</span><span class="ap-value" style="color:'+clr+'">'+(proj||'—')+'</span></div>';
+  }
+  document.getElementById('ap-content').innerHTML = html;
+  panel.classList.add('visible');
+}
+
 /* ═══════ SWITCH VUE ═══════ */
 function switchVue(vue) {
   currentVue = vue;
@@ -332,8 +383,8 @@ function updateLegend(vue) {
       + '<div class="legend-row"><div class="legend-color" style="background:#e74c3c"></div> ASU seul</div>'
       + '<div class="legend-row"><div class="legend-color" style="background:#2980b9"></div> VLM</div>'
       + '<div class="legend-row"><div class="legend-color" style="background:#27ae60"></div> VL SSUAP</div>'
-      + '<div class="legend-row"><div class="legend-color" style="background:#2980b9;border:2px dashed #e74c3c"></div> VLM + ASU</div>'
-      + '<div class="legend-row"><div class="legend-color" style="background:#27ae60;border:2px dashed #e74c3c"></div> VL SSUAP + ASU</div>'
+      + '<div class="legend-row"><svg width="16" height="16" viewBox="0 0 16 16" style="flex-shrink:0"><polygon points="8,1 9.5,5.5 14,5.5 10.5,8.5 12,13 8,10.5 4,13 5.5,8.5 2,5.5 6.5,5.5" fill="#e74c3c"/><circle cx="8" cy="8" r="4" fill="#2980b9"/></svg> VLM + ASU (pics rouges)</div>'
+      + '<div class="legend-row"><svg width="16" height="16" viewBox="0 0 16 16" style="flex-shrink:0"><polygon points="8,1 9.5,5.5 14,5.5 10.5,8.5 12,13 8,10.5 4,13 5.5,8.5 2,5.5 6.5,5.5" fill="#e74c3c"/><circle cx="8" cy="8" r="4" fill="#27ae60"/></svg> VL SSUAP + ASU (pics rouges)</div>'
       + '<div class="legend-row"><div class="legend-color" style="background:#7f8c8d"></div> Aucun véhicule</div>';
   } else {
     var year = (vue === '2027') ? '2027' : '2032';
