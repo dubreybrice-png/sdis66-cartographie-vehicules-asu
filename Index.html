@@ -145,6 +145,7 @@ var centresData = [];
 var currentVue = 'actuelle';  // 'actuelle', '2027', '2032'
 var filters = { asu: true, vlm: true, vlssuap: true };
 var labelsVisible = true;
+var initialFitDone = false;
 
 var PO_BOUNDS = L.latLngBounds(L.latLng(42.33, 1.72), L.latLng(42.92, 3.18));
 
@@ -193,6 +194,7 @@ function buildMarkerSVG(c, vue) {
 
   var svg = '<svg width="'+size+'" height="'+size+'" viewBox="0 0 '+size+' '+size+'">' 
     + asuLayer
+    + '<circle cx="'+h+'" cy="'+h+'" r="'+r+'" fill="'+color+'" stroke="#fff" stroke-width="2"/>'
     + (label ? '<text x="'+h+'" y="'+(h+4)+'" text-anchor="middle" fill="#fff" font-size="8" font-weight="bold">'+label+'</text>' : '')
     + '</svg>';
   return svg;
@@ -306,9 +308,10 @@ function renderMarkers() {
     allMarkers.push(m);
   });
 
-  if (allMarkers.length > 0) {
+  if (allMarkers.length > 0 && !initialFitDone) {
     var grp = L.featureGroup(allMarkers);
     map.fitBounds(grp.getBounds().pad(0.02));
+    initialFitDone = true;
   }
 }
 
