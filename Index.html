@@ -16,7 +16,8 @@
     #header h1{font-size:1rem;font-weight:600}
     #header .badge{background:rgba(255,255,255,.2);padding:3px 10px;border-radius:10px;font-size:.72rem}
 
-    #map{width:100%;height:calc(100vh - 42px)}
+    #map-container{position:relative;width:100%;height:calc(100vh - 42px)}
+    #map{width:100%;height:100%}
 
     #loading{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:18px;background:linear-gradient(135deg,#1a1a2e 0%,#16213e 100%);z-index:9999}
     #loading .load-title{font-size:1.8rem;font-weight:800;letter-spacing:3px;color:#e74c3c;text-transform:uppercase;animation:pulse 1.5s ease-in-out infinite}
@@ -83,7 +84,19 @@
   <span class="badge" id="badge-info">Chargement…</span>
 </div>
 
-<div id="map"></div>
+<div id="map-container">
+  <div id="map"></div>
+  <!-- LÉGENDE -->
+  <div class="legend" id="legend">
+    <strong>Légende</strong>
+    <div class="legend-row"><div class="legend-color" style="background:#e74c3c"></div> ASU seul</div>
+    <div class="legend-row"><div class="legend-color" style="background:#2980b9"></div> VLM</div>
+    <div class="legend-row"><div class="legend-color" style="background:#27ae60"></div> VL SSUAP</div>
+    <div class="legend-row"><svg width="16" height="16" viewBox="0 0 16 16" style="flex-shrink:0"><polygon points="8,1 9.5,5.5 14,5.5 10.5,8.5 12,13 8,10.5 4,13 5.5,8.5 2,5.5 6.5,5.5" fill="#e74c3c"/><circle cx="8" cy="8" r="4" fill="#2980b9"/></svg> VLM + ASU (pics rouges)</div>
+    <div class="legend-row"><svg width="16" height="16" viewBox="0 0 16 16" style="flex-shrink:0"><polygon points="8,1 9.5,5.5 14,5.5 10.5,8.5 12,13 8,10.5 4,13 5.5,8.5 2,5.5 6.5,5.5" fill="#e74c3c"/><circle cx="8" cy="8" r="4" fill="#27ae60"/></svg> VL SSUAP + ASU (pics rouges)</div>
+    <div class="legend-row"><div class="legend-color" style="background:#7f8c8d"></div> Aucun véhicule</div>
+  </div>
+</div>
 
 <!-- CONTRÔLES -->
 <div class="controls">
@@ -101,17 +114,6 @@
   <div class="ctrl-sep"></div>
   <button class="ctrl-btn active" onclick="toggleLabels(this)" id="btnLabels">🏷️ Noms</button>
   <button class="ctrl-btn" onclick="showExportModal()">📄 Export PDF</button>
-</div>
-
-<!-- LÉGENDE -->
-<div class="legend" id="legend">
-  <strong>Légende</strong>
-  <div class="legend-row"><div class="legend-color" style="background:#e74c3c"></div> ASU seul</div>
-  <div class="legend-row"><div class="legend-color" style="background:#2980b9"></div> VLM</div>
-  <div class="legend-row"><div class="legend-color" style="background:#27ae60"></div> VL SSUAP</div>
-  <div class="legend-row"><svg width="16" height="16" viewBox="0 0 16 16" style="flex-shrink:0"><polygon points="8,1 9.5,5.5 14,5.5 10.5,8.5 12,13 8,10.5 4,13 5.5,8.5 2,5.5 6.5,5.5" fill="#e74c3c"/><circle cx="8" cy="8" r="4" fill="#2980b9"/></svg> VLM + ASU (pics rouges)</div>
-  <div class="legend-row"><svg width="16" height="16" viewBox="0 0 16 16" style="flex-shrink:0"><polygon points="8,1 9.5,5.5 14,5.5 10.5,8.5 12,13 8,10.5 4,13 5.5,8.5 2,5.5 6.5,5.5" fill="#e74c3c"/><circle cx="8" cy="8" r="4" fill="#27ae60"/></svg> VL SSUAP + ASU (pics rouges)</div>
-  <div class="legend-row"><div class="legend-color" style="background:#7f8c8d"></div> Aucun véhicule</div>
 </div>
 
 <!-- PANNEAU ASTREINTE MÉDICALE -->
@@ -419,47 +421,94 @@ function closeExportModal() { document.getElementById('export-modal').classList.
 
 function exportPDF(mode) {
   var status = document.getElementById('export-status');
-  status.textContent = '⏳ Génération en cours…';
-  var mapEl = document.getElementById('map');
+  status.textContent = '⏳ Préparation de la carte…';
 
-  html2canvas(mapEl, { useCORS: true, scale: 2, logging: false, backgroundColor: '#f0f0f0' }).then(function(canvas) {
-    var jsPDF = window.jspdf.jsPDF;
-    var pdf = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
-    var pageW = pdf.internal.pageSize.getWidth();
-    var pageH = pdf.internal.pageSize.getHeight();
+  /* ── 1. Sauvegarder l'état actuel ── */
+  var savedCenter = map.getCenter();
+  var savedZoom = map.getZoom();
+  var container = document.getElementById('map-container');
+  var legend = document.getElementById('legend');
+  var savedContainerH = container.style.height;
+  var savedContainerW = container.style.width;
 
-    // Header
-    pdf.setFillColor(192, 57, 43); pdf.rect(0, 0, pageW, 12, 'F');
-    pdf.setTextColor(255, 255, 255); pdf.setFontSize(13); pdf.setFont(undefined, 'bold');
-    var vueLabel = currentVue === 'actuelle' ? 'État actuel' : 'Projection ' + currentVue;
-    pdf.text('SDIS 66 — Cartographie Véhicules et ASU — ' + vueLabel, pageW / 2, 8, { align: 'center' });
-    pdf.setFontSize(7); pdf.setFont(undefined, 'normal');
-    var now = new Date().toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
-    pdf.text('Généré le ' + now, pageW - 5, 8, { align: 'right' });
+  /* ── 2. Redimensionner le container pour coller au ratio A4 paysage ── */
+  /*    A4 landscape = 297×210mm, header 12mm → zone carte 297×198mm     */
+  var pdfRatio = 297 / 198;
+  var curW = container.offsetWidth;
+  var targetH = Math.round(curW / pdfRatio);
+  container.style.height = targetH + 'px';
 
-    // Map image
-    var imgData = canvas.toDataURL('image/png');
-    var mapY = 14;
-    var mapH = pageH - 18;
-    var ratio = canvas.width / canvas.height;
-    var mapW = Math.min(pageW - 10, mapH * ratio);
-    pdf.addImage(imgData, 'PNG', (pageW - mapW) / 2, mapY, mapW, mapH);
+  /* ── 3. Légende en haut à gauche (sur la carte) ── */
+  legend.style.bottom = 'auto';
+  legend.style.top = '10px';
+  legend.style.left = '10px';
 
-    if (mode === 'complet') {
-      status.textContent = '⏳ Récupération du tableau…';
-      google.script.run.withSuccessHandler(function(tableau) {
-        pdf.addPage();
-        ajouterTableauPDF(pdf, tableau, 10, pageW, pageH);
+  /* ── 4. Recalculer Leaflet + cadrer sur le département ── */
+  map.invalidateSize({ animate: false });
+  var pdfBounds = L.latLngBounds(
+    L.latLng(42.34, 1.76),   // SW — sous St-Laurent / ouest de Porté
+    L.latLng(42.90, 3.20)    // NE — au-dessus de Vingrau / est de Cerbère
+  );
+  map.fitBounds(pdfBounds, { animate: false, padding: [8, 8] });
+
+  /* ── 5. Attendre le chargement des tuiles puis capturer ── */
+  status.textContent = '⏳ Chargement des tuiles…';
+  setTimeout(function() {
+    status.textContent = '⏳ Capture en cours…';
+
+    html2canvas(container, { useCORS: true, scale: 2, logging: false, backgroundColor: '#f0f0f0',
+      width: curW, height: targetH }).then(function(canvas) {
+
+      /* ── Restaurer immédiatement ── */
+      container.style.height = savedContainerH || '';
+      container.style.width = savedContainerW || '';
+      legend.style.top = '';
+      legend.style.bottom = '20px';
+      map.invalidateSize({ animate: false });
+      map.setView(savedCenter, savedZoom, { animate: false });
+
+      var jsPDF = window.jspdf.jsPDF;
+      var pdf = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
+      var pageW = pdf.internal.pageSize.getWidth();  // 297
+      var pageH = pdf.internal.pageSize.getHeight();  // 210
+
+      /* ── Header ── */
+      pdf.setFillColor(192, 57, 43); pdf.rect(0, 0, pageW, 12, 'F');
+      pdf.setTextColor(255, 255, 255); pdf.setFontSize(13); pdf.setFont(undefined, 'bold');
+      var vueLabel = currentVue === 'actuelle' ? 'État actuel' : 'Projection ' + currentVue;
+      pdf.text('SDIS 66 — Cartographie Véhicules et ASU — ' + vueLabel, pageW / 2, 8, { align: 'center' });
+      pdf.setFontSize(7); pdf.setFont(undefined, 'normal');
+      var now = new Date().toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+      pdf.text('Généré le ' + now, pageW - 5, 8, { align: 'right' });
+
+      /* ── Image carte — bord à bord sous le header ── */
+      var imgData = canvas.toDataURL('image/png');
+      pdf.addImage(imgData, 'PNG', 0, 12, pageW, pageH - 12);
+
+      if (mode === 'complet') {
+        status.textContent = '⏳ Récupération du tableau…';
+        google.script.run.withSuccessHandler(function(tableau) {
+          pdf.addPage();
+          ajouterTableauPDF(pdf, tableau, 10, pageW, pageH);
+          pdf.save('cartographie_vehicules_SDIS66_' + currentVue + '.pdf');
+          status.textContent = '✅ PDF téléchargé !';
+          setTimeout(closeExportModal, 1500);
+        }).withFailureHandler(function(err) { status.textContent = '❌ Erreur: ' + err; }).getTableauData(currentVue);
+      } else {
         pdf.save('cartographie_vehicules_SDIS66_' + currentVue + '.pdf');
         status.textContent = '✅ PDF téléchargé !';
         setTimeout(closeExportModal, 1500);
-      }).withFailureHandler(function(err) { status.textContent = '❌ Erreur: ' + err; }).getTableauData(currentVue);
-    } else {
-      pdf.save('cartographie_vehicules_SDIS66_' + currentVue + '.pdf');
-      status.textContent = '✅ PDF téléchargé !';
-      setTimeout(closeExportModal, 1500);
-    }
-  }).catch(function(err) { status.textContent = '❌ Erreur: ' + err.message; });
+      }
+    }).catch(function(err) {
+      container.style.height = savedContainerH || '';
+      container.style.width = savedContainerW || '';
+      legend.style.top = '';
+      legend.style.bottom = '20px';
+      map.invalidateSize({ animate: false });
+      map.setView(savedCenter, savedZoom, { animate: false });
+      status.textContent = '❌ Erreur: ' + err.message;
+    });
+  }, 2500);
 }
 
 function ajouterTableauPDF(pdf, tableau, startY, pageW, pageH) {
